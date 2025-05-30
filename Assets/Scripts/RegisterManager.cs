@@ -1,4 +1,4 @@
-using UnityEngine;
+п»їusing UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using UnityEngine.Networking;
@@ -8,6 +8,7 @@ public class RegisterManager : MonoBehaviour
 {
     [Header("UI Elements")]
     public TMP_InputField usernameInput;
+    public TMP_InputField emailInput;
     public Button registerButton;
     public TextMeshProUGUI statusText;
 
@@ -15,7 +16,10 @@ public class RegisterManager : MonoBehaviour
     public GameObject registerCanvas;
     public GameObject mainCanvas;
 
-    private string registerUrl = "http://localhost:80/drone_game/register.php";
+    [Header("References")]
+    public PlayerPinger playerPinger;
+
+    private string registerUrl = ServerConfig.BaseUrl + "/register.php";
 
     void Start()
     {
@@ -31,47 +35,50 @@ public class RegisterManager : MonoBehaviour
 
     void OnRegisterClicked()
     {
-        if (usernameInput == null || statusText == null)
-        {
-            Debug.LogError("usernameInput або statusText не призначено в інспекторі!");
-            return;
-        }
-
         string username = usernameInput.text.Trim();
+        string email = emailInput.text.Trim();
 
-        if (string.IsNullOrEmpty(username))
+        if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(email))
         {
-            statusText.text = "Введіть ім'я!";
+            statusText.text = "Р’РІРµРґС–С‚СЊ С–РјвЂ™СЏ С‚Р° email!";
             return;
         }
 
-        StartCoroutine(RegisterPlayer(username));
+        StartCoroutine(RegisterPlayer(username, email));
     }
 
-    IEnumerator RegisterPlayer(string username)
+    IEnumerator RegisterPlayer(string username, string email)
     {
         WWWForm form = new WWWForm();
         form.AddField("username", username);
+        form.AddField("email", email);
 
         UnityWebRequest request = UnityWebRequest.Post(registerUrl, form);
         yield return request.SendWebRequest();
 
         if (request.result != UnityWebRequest.Result.Success)
         {
-            statusText.text = $"Помилка: {request.error}";
+            statusText.text = $"РџРѕРјРёР»РєР°: {request.error}";
         }
         else
         {
             string jsonResponse = request.downloadHandler.text;
-            Debug.Log("Отримано відповідь: " + jsonResponse);
+            Debug.Log("РћС‚СЂРёРјР°РЅРѕ РІС–РґРїРѕРІС–РґСЊ: " + jsonResponse);
 
             PlayerResponse response = JsonUtility.FromJson<PlayerResponse>(jsonResponse);
-            int playerId = response.player_id;
+            if (response.player_id > 0)
+            {
+                PlayerPrefs.SetInt("player_id", response.player_id);
+                statusText.text = $"РЈСЃРїС–С…: {response.message}, ID: {response.player_id}";
+                if (playerPinger != null)
+                    playerPinger.StartPinging(response.player_id);
 
-            statusText.text = $"Зареєстровано! Ваш ID: {playerId}";
-            PlayerPrefs.SetInt("player_id", playerId);
-
-            OnRegisterSuccess();
+                OnRegisterSuccess();
+            }
+            else
+            {
+                statusText.text = $"РџРѕРјРёР»РєР°: {response.message}";
+            }
         }
     }
 
@@ -79,6 +86,7 @@ public class RegisterManager : MonoBehaviour
     public class PlayerResponse
     {
         public int player_id;
+        public string message;
     }
 
     public void OnRegisterSuccess()
